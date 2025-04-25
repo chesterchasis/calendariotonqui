@@ -229,14 +229,14 @@
     <script>
         // --- Firebase Configuration ---
         const firebaseConfig = {
-          apiKey: "AIzaSyD13sNtjwmBCRNAyXqp1TDqb6BxZE4CSfQ", // ¡Considerar seguridad!
-          authDomain: "calendarionly.firebaseapp.com",
-          databaseURL: "https://calendarionly-default-rtdb.europe-west1.firebasedatabase.app", // Realtime DB URL (no usado aquí, usamos Firestore)
-          projectId: "calendarionly",
-          storageBucket: "calendarionly.firebasestorage.app",
-          messagingSenderId: "906928991840",
-          appId: "1:906928991840:web:bd24a268527685cf42dd05"
-        };
+  apiKey: "AIzaSyD0zentUNqgouFTVD3i3wKLruRQkgMZt_Y",
+  authDomain: "calentonqui.firebaseapp.com",
+  databaseURL: "https://calentonqui-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "calentonqui",
+  storageBucket: "calentonqui.firebasestorage.app",
+  messagingSenderId: "386155002525",
+  appId: "1:386155002525:web:b8eb1f054ef2cb8c5a7274"
+};
 
         // --- Initialize Firebase ---
         firebase.initializeApp(firebaseConfig);
@@ -321,7 +321,7 @@
         }
 
         /**
-         * Actualiza el estado de un día específico en Firestore (Método Simplificado).
+         * Actualiza el estado de un día específico en Firestore (Método Simplificado v2).
          * @param {string} dateString - La fecha en formato 'YYYY-MM-DD'.
          * @param {string|null} newIcon1 - El nuevo código para el icono 1, o null/"" para limpiar.
          * @param {string|null} newIcon2 - El nuevo código para el icono 2, o null/"" para limpiar.
@@ -331,11 +331,13 @@
             console.log(`Updating Firestore for ${dateString}: Icon1=${newIcon1}, Icon2=${newIcon2}`);
             const yearDocRef = db.collection('calendars').doc(displayedYear.toString());
 
-            // 1. Crear una copia modificable del estado actual del día
-            const updatedDayData = { ...dayData }; // Copia superficial del objeto de días del año
-            let dayInfo = { ...(updatedDayData[dateString] || {}) }; // Copia del día específico o nuevo objeto
+            // 1. Crear una copia del objeto global dayData para modificarlo
+            //    Usamos JSON.parse(JSON.stringify(...)) para una copia profunda y evitar problemas de referencia
+            const updatedFullDayData = JSON.parse(JSON.stringify(dayData));
 
-            // 2. Modificar la copia localmente
+            // 2. Modificar la entrada para el día específico en la copia
+            let dayInfo = updatedFullDayData[dateString] || {}; // Obtener o crear entrada para el día
+
             if (newIcon1 === "" || newIcon1 === null) {
                 delete dayInfo.icon1;
             } else {
@@ -349,27 +351,26 @@
 
             // 3. Decidir si guardar el objeto modificado o borrar la entrada del día
             if (Object.keys(dayInfo).length === 0) {
-                // Si no quedan iconos, borrar la entrada completa para este día
-                delete updatedDayData[dateString];
+                // Si no quedan iconos, borrar la entrada completa para este día de la copia
+                delete updatedFullDayData[dateString];
             } else {
-                // Si quedan iconos, actualizar la entrada para este día
-                updatedDayData[dateString] = dayInfo;
+                // Si quedan iconos, actualizar la entrada para este día en la copia
+                updatedFullDayData[dateString] = dayInfo;
             }
 
             // 4. Guardar TODO el objeto 'days' modificado en Firestore
             try {
-                // DEBUG: Loguear el objeto que se va a enviar
-                console.log("Attempting to save to Firestore:", { days: updatedDayData });
+                console.log("Attempting to save to Firestore:", { days: updatedFullDayData });
                 // Usar set con merge:true para actualizar solo el campo 'days'
-                // Si el documento del año no existe, lo crea.
-                await yearDocRef.set({ days: updatedDayData }, { merge: true });
+                await yearDocRef.set({ days: updatedFullDayData }, { merge: true });
                 console.log(`Firestore updated successfully for year ${displayedYear} (day ${dateString})`);
 
-                // Actualizar el estado local AHORA que sabemos que se guardó (o confiar en onSnapshot)
-                dayData = updatedDayData; // Reemplazar el estado local con la versión modificada
+                // Actualizar el estado local AHORA que sabemos que se guardó
+                // (onSnapshot también lo hará, pero esto asegura consistencia inmediata)
+                dayData = updatedFullDayData;
 
                 // Refrescar UI (onSnapshot debería hacerlo, pero esto da respuesta inmediata)
-                refreshUI();
+                // refreshUI(); // Descomentar si onSnapshot no es suficiente
 
             } catch (error) {
                 console.error(`Error updating Firestore for year ${displayedYear} (day ${dateString}):`, error);
