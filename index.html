@@ -239,7 +239,6 @@
         };
 
         // --- Initialize Firebase ---
-        // Usamos la versión compat para mantener una sintaxis más similar a v8
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore(); // Obtener instancia de Firestore
 
@@ -296,7 +295,7 @@
             'DANCE': { label: 'Bailar', icon: 'fa-person-dancing', emoji: '💃' }
         };
 
-        // --- Funciones de Datos (AHORA CON FIRESTORE) ---
+        // --- Funciones de Datos (CON FIRESTORE) ---
 
         /**
          * Obtiene los datos de los días para un año específico desde Firestore.
@@ -310,22 +309,19 @@
                 const docSnap = await yearDocRef.get();
                 if (docSnap.exists) {
                     console.log("Document data:", docSnap.data());
-                    // Asegurarse de devolver el mapa 'days' o un objeto vacío si no existe
                     return docSnap.data().days || {};
                 } else {
-                    // Documento no existe para este año
                     console.log(`No document found for year ${year} in Firestore.`);
                     return {};
                 }
             } catch (error) {
                 console.error(`Error getting document for year ${year}:`, error);
-                // Considerar cómo manejar errores (ej. mostrar mensaje al usuario)
-                return {}; // Devolver objeto vacío en caso de error
+                return {};
             }
         }
 
         /**
-         * Actualiza el estado de un día específico en Firestore.
+         * Actualiza el estado de un día específico en Firestore (Método Simplificado).
          * @param {string} dateString - La fecha en formato 'YYYY-MM-DD'.
          * @param {string|null} newIcon1 - El nuevo código para el icono 1, o null/"" para limpiar.
          * @param {string|null} newIcon2 - El nuevo código para el icono 2, o null/"" para limpiar.
@@ -335,65 +331,51 @@
             console.log(`Updating Firestore for ${dateString}: Icon1=${newIcon1}, Icon2=${newIcon2}`);
             const yearDocRef = db.collection('calendars').doc(displayedYear.toString());
 
-            // Crear el objeto de actualización para Firestore
-            // Usamos notación de punto para actualizar campos anidados en el mapa 'days'
-            const updateData = {};
-            const fieldPathIcon1 = `days.${dateString}.icon1`;
-            const fieldPathIcon2 = `days.${dateString}.icon2`;
+            // 1. Crear una copia modificable del estado actual del día
+            const updatedDayData = { ...dayData }; // Copia superficial del objeto de días del año
+            let dayInfo = { ...(updatedDayData[dateString] || {}) }; // Copia del día específico o nuevo objeto
 
+            // 2. Modificar la copia localmente
             if (newIcon1 === "" || newIcon1 === null) {
-                // Para borrar un campo, usamos firebase.firestore.FieldValue.delete()
-                // Si todo el objeto del día queda vacío, podríamos querer borrarlo,
-                // pero setDoc con merge maneja bien la creación/actualización.
-                // Por simplicidad, podemos asignar null o un valor especial si delete() da problemas.
-                // O podríamos leer el doc, modificar el objeto local y hacer set completo.
-                // La forma más robusta es usar FieldValue.delete() si está disponible en compat,
-                // o asignar null si es necesario.
-                // Alternativa simple: asignar null o borrar localmente y luego set con merge.
-                 updateData[fieldPathIcon1] = firebase.firestore.FieldValue.delete();
+                delete dayInfo.icon1;
             } else {
-                updateData[fieldPathIcon1] = newIcon1;
+                dayInfo.icon1 = newIcon1;
             }
-
             if (newIcon2 === "" || newIcon2 === null) {
-                 updateData[fieldPathIcon2] = firebase.firestore.FieldValue.delete();
+                delete dayInfo.icon2;
             } else {
-                updateData[fieldPathIcon2] = newIcon2;
+                dayInfo.icon2 = newIcon2;
             }
 
-             // Si ambos se borran, necesitamos asegurarnos de que el objeto del día se elimine
-             // Firestore no elimina automáticamente objetos vacíos con FieldValue.delete en subcampos.
-             // Una estrategia es, si ambos son null/vacío, borrar la clave completa del día.
-             if ((newIcon1 === "" || newIcon1 === null) && (newIcon2 === "" || newIcon2 === null)) {
-                 updateData[`days.${dateString}`] = firebase.firestore.FieldValue.delete();
-                 // Limpiar las actualizaciones individuales si vamos a borrar todo el día
-                 delete updateData[fieldPathIcon1];
-                 delete updateData[fieldPathIcon2];
-             }
+            // 3. Decidir si guardar el objeto modificado o borrar la entrada del día
+            if (Object.keys(dayInfo).length === 0) {
+                // Si no quedan iconos, borrar la entrada completa para este día
+                delete updatedDayData[dateString];
+            } else {
+                // Si quedan iconos, actualizar la entrada para este día
+                updatedDayData[dateString] = dayInfo;
+            }
 
-
+            // 4. Guardar TODO el objeto 'days' modificado en Firestore
             try {
-                // Usar set con merge:true crea el documento si no existe
-                // y actualiza/añade los campos especificados sin tocar los demás días.
-                await yearDocRef.set(updateData, { merge: true });
-                console.log(`Firestore updated successfully for ${dateString}`);
+                // Usar set con merge:true para actualizar solo el campo 'days'
+                // Si el documento del año no existe, lo crea.
+                await yearDocRef.set({ days: updatedDayData }, { merge: true });
+                console.log(`Firestore updated successfully for year ${displayedYear} (day ${dateString})`);
 
-                // ACTUALIZACIÓN LOCAL (Opcional si confías en onSnapshot, pero bueno para UI inmediata)
-                // Actualizar el objeto local dayData inmediatamente para reflejar el cambio
-                // (Esta parte es similar a la versión anterior, pero ahora ocurre *después* del intento de guardado)
-                let localDayInfo = dayData[dateString] || {};
-                if (newIcon1 === "" || newIcon1 === null) delete localDayInfo.icon1; else localDayInfo.icon1 = newIcon1;
-                if (newIcon2 === "" || newIcon2 === null) delete localDayInfo.icon2; else localDayInfo.icon2 = newIcon2;
-                if (Object.keys(localDayInfo).length === 0) delete dayData[dateString]; else dayData[dateString] = localDayInfo;
+                // Actualizar el estado local AHORA que sabemos que se guardó (o confiar en onSnapshot)
+                dayData = updatedDayData; // Reemplazar el estado local con la versión modificada
 
-                // Refrescar UI (si onSnapshot no es suficiente o para respuesta inmediata)
-                // refreshUI(); // onSnapshot debería encargarse, pero podemos forzarlo aquí
+                // Refrescar UI (onSnapshot debería hacerlo, pero esto da respuesta inmediata)
+                refreshUI();
 
             } catch (error) {
-                console.error(`Error updating Firestore for ${dateString}:`, error);
-                // Considerar revertir el cambio local o notificar al usuario
+                console.error(`Error updating Firestore for year ${displayedYear} (day ${dateString}):`, error);
+                // Lanzar el error para que el listener del botón lo capture si es necesario
+                throw error;
             }
         }
+
 
         // --- Lógica Horario Base ---
         function getDefaultStatusForDay(dateString) {
@@ -585,7 +567,6 @@
 
                  if (monthIndex !== -1 && !isNaN(year)) {
                      // Solo regenerar si el año/mes del modal coincide con el actual
-                     // (Evita redibujar si el cambio vino de otro año)
                      if (year === displayedYear) {
                          const newMonthGrid = generateSingleMonthGrid(year, monthIndex); // Ya aplica marcas
                          monthModalBody.innerHTML = '';
@@ -604,7 +585,6 @@
          * @param {number} year El año a escuchar.
          */
         function setupRealtimeListener(year) {
-            // Cancelar listener anterior si existe
             if (unsubscribeRealtimeListener) {
                 console.log("Detaching previous listener...");
                 unsubscribeRealtimeListener();
@@ -620,9 +600,8 @@
                     dayData = doc.data().days || {};
                 } else {
                     console.log(`Document for year ${year} does not exist in Firestore.`);
-                    dayData = {}; // Reset local data if doc deleted
+                    dayData = {};
                 }
-                // Solo refrescar si el año del listener coincide con el año mostrado
                 if (year === displayedYear) {
                     refreshUI();
                 } else {
@@ -630,7 +609,6 @@
                 }
             }, error => {
                 console.error(`Error in Firestore listener for year ${year}: `, error);
-                // Aquí podrías intentar reconectar o notificar al usuario
             });
         }
 
@@ -654,7 +632,6 @@
             try {
                 const monthIndex = parseInt(monthDiv.dataset.month);
                 const year = parseInt(monthDiv.dataset.year);
-                // No necesitamos cargar datos aquí, openMonthModal usa los datos globales
                 openMonthModal(year, monthIndex);
             }
             catch(error) { console.error("Error obteniendo datos mes:", error); }
@@ -676,7 +653,7 @@
              }
         });
 
-        // Usar async para poder usar await dentro si fuera necesario (aunque updateDayStatus ya lo es)
+        // Event listener del botón Guardar (MODIFICADO con try/finally)
         dayEditorSaveBtn.addEventListener('click', async () => {
             if (!selectedDateForEdit) { console.error("Error: No hay fecha seleccionada."); return; }
             const selectElement1 = statusSelectionDiv1.querySelector('select');
@@ -686,15 +663,25 @@
             const newStatus1 = selectElement1.value;
             const newStatus2 = selectElement2.value;
 
-            // Llamar a la función centralizada (que ahora es async)
-            await updateDayStatus(selectedDateForEdit, newStatus1, newStatus2);
-
-            // La UI se refresca desde onSnapshot o desde updateDayStatus (si se descomenta refreshUI allí)
-
-            // Cerrar editor
-            if (dayEditorModal) dayEditorModal.classList.remove('visible');
-            selectedDateForEdit = null;
+            // Intentar guardar y luego cerrar el modal
+            try {
+                 console.log("Calling updateDayStatus...");
+                 await updateDayStatus(selectedDateForEdit, newStatus1, newStatus2);
+                 console.log("UpdateDayStatus completed, attempting to close modal...");
+            } catch (error) {
+                 console.error("Error occurred during updateDayStatus:", error);
+                 // Aquí podrías mostrar un mensaje de error al usuario si lo deseas
+                 // alert("Error al guardar los cambios. Revisa la consola.");
+            } finally {
+                 // Cerrar editor SIEMPRE después de intentar guardar
+                 if (dayEditorModal) {
+                     dayEditorModal.classList.remove('visible');
+                     console.log("Edit modal closed.");
+                 }
+                 selectedDateForEdit = null; // Limpiar la fecha seleccionada
+            }
         });
+
 
         dayEditorCancelBtn.addEventListener('click', () => { if (dayEditorModal) dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; });
         dayEditorCloseBtn.addEventListener('click', () => { if (dayEditorModal) dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; });
@@ -708,7 +695,6 @@
          });
 
         // --- Inicialización App ---
-        // Hacer initApp async para poder usar await al cargar datos iniciales
         async function initApp() {
             console.log(`Iniciando calendario con Firebase`);
             const essentialElementsExist = calendarAppDiv && calendarContainer && monthModal && dayEditorModal && monthModalBody && statusSelectionDiv1 && statusSelectionDiv2;
@@ -718,17 +704,11 @@
                 return;
             }
 
-            // 1. Cargar datos iniciales para el año actual
-            dayData = await fetchDataForYear(displayedYear); // Esperar a que los datos carguen
-
-            // 2. Configurar el listener de tiempo real para el año inicial
+            dayData = await fetchDataForYear(displayedYear);
             setupRealtimeListener(displayedYear);
-
-            // 3. Mostrar la app y renderizar la UI inicial (ya con los datos cargados)
             calendarAppDiv.style.display = 'block';
             renderAnnualCalendar(displayedYear);
 
-            // 4. Abrir modal del mes actual si corresponde
             const currentActualMonth = today.getMonth();
             const currentActualYear = today.getFullYear();
             if (displayedYear === currentActualYear) {
