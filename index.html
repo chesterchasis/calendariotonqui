@@ -6,20 +6,26 @@
     <title>Calendario de Trabajo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
     <style>
         /* --- Variables de Color --- */
         :root {
             --bg-color-soft: #f8fafc;
-            /* Colores originales para estados */
-            --color-td: #f59e0b; /* Amarillo sol */
-            --color-tn: #4b5563; /* Gris/Azul noche */
-            --color-l: #22c55e;  /* Verde casa */
-            --color-vac: #0ea5e9; /* Azul claro avión */
-            --color-hotel: #a855f7; /* Púrpura hotel */
-            --color-flag-sk-blue: #0b4ea2; /* Azul bandera SK */
-            --color-flag-sk-red: #ee1c25;  /* Rojo bandera SK */
-            --color-default-icon2: #8b5cf6; /* Morado para segunda casa */
-            --color-current-day-border: #3b82f6; /* Azul para día actual */
+            --color-td: #f59e0b;
+            --color-tn: #4b5563;
+            --color-l: #22c55e;
+            --color-vac: #0ea5e9;
+            --color-hotel: #a855f7;
+            --color-flag-sk-blue: #0b4ea2;
+            --color-flag-sk-red: #ee1c25;
+            --color-flag-es-red: #aa151b;
+            --color-flag-es-yellow: #f1bf00;
+            --color-dance: #ec4899;
+            --color-default-icon2: #8b5cf6;
+            --color-current-day-border: #3b82f6;
+            --color-weekend-bg-vibrant: #fffbeb; /* Amarillo pastel para findes */
+            --color-month-bg-alt: #fdfdfd;
         }
 
         /* --- Estilos Generales --- */
@@ -40,25 +46,34 @@
         #current-year { font-size: 1.5rem; font-weight: bold; color: #1f2937; min-width: 80px; text-align: center; }
 
         /* --- Calendario Anual --- */
-        .calendar-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; padding: 0 2rem 2rem 2rem; }
-        .month { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .month:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+        .calendar-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding: 0 2rem 2rem 2rem;
+        }
+        .month {
+            border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .calendar-container .month:nth-child(even) { background-color: var(--color-month-bg-alt); }
+        .calendar-container .month:nth-child(odd) { background-color: white; }
+        .month:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.09); }
         .month-header { background-color: #6b7280; color: white; padding: 0.4rem; text-align: center; font-weight: 600; font-size: 0.9rem; }
         .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; padding: 0.2rem; }
         .day-header { font-weight: 600; font-size: 0.9rem; color: #6b7280; padding-bottom: 0.2rem; }
-        .day { padding: 0.8rem; font-size: 1rem; border-top: 1px solid #f3f4f6; position: relative; display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; background-color: #ffffff; min-height: 40px; }
-        .day.empty { background-color: #f9fafb; border-top: none; }
+        .day { padding: 0.8rem; font-size: 1rem; border-top: 1px solid #f3f4f6; position: relative; display: flex; align-items: center; justify-content: center; border-radius: 0.25rem; background-color: transparent; min-height: 40px; transition: opacity 0.3s ease; }
+        .day.empty { background-color: #f9fafb; border-top: none; opacity: 0.6; }
+        /* Estilo para fines de semana (Anual) */
+        .day.weekend-day {
+            background-color: var(--color-weekend-bg-vibrant); /* Amarillo pastel */
+        }
         .day span { position: absolute; top: 2px; right: 2px; background-color: rgba(255, 255, 255, 0.7); border-radius: 50%; padding: 0 2px; font-size: 0.6rem; z-index: 2; color: #374151; font-weight: normal; }
-        .day.current-day { border: 1.5px solid var(--color-current-day-border); font-weight: bold; }
-        /* Iconos en vista anual */
+        .day.current-day { border: 2px solid var(--color-current-day-border); font-weight: bold; }
+        /* Emojis en vista anual */
         .day .icon-container { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; position: relative; }
-        .day .icon-container .main-icon-wrapper { /* Contenedor icono 1 */ }
-        .day .icon-container .main-icon { font-size: 0.9rem; z-index: 1; }
-        .day .icon-container .main-icon.fa-sun { color: var(--color-td); }
-        .day .icon-container .main-icon.fa-moon { color: var(--color-tn); }
-        .day .icon-container .main-icon.fa-house { color: var(--color-l); }
-        .day .icon-container .main-icon.fa-plane { color: var(--color-vac); }
-        .day .icon-container .main-icon.fa-hotel { color: var(--color-hotel); }
+        .day .icon-container .main-icon-wrapper { font-size: 1.2rem; line-height: 1; z-index: 1; text-align: center; }
         /* Indicador si icono 2 tiene override */
         .day .secondary-indicator-wrapper { /* Contenedor indicador */ }
         .day .secondary-indicator { position: absolute; bottom: 2px; left: 5px; width: 6px; height: 6px; border-radius: 50%; z-index: 1; border: 1px solid white; background-color: var(--color-default-icon2); }
@@ -78,83 +93,87 @@
         .modal-day-header { font-weight: bold; font-size: 0.9rem; color: #6b7280; padding-bottom: 0.5rem; text-align: center; }
         /* Celda día modal */
         .modal-day {
-            min-height: 70px;
-            border: 1px solid #e5e7eb; border-radius: 0.5rem; position: relative;
+            min-height: 70px; border: 1px solid #e5e7eb; border-radius: 0.5rem; position: relative;
             padding: 0.5rem; background-color: #f8f8f8; cursor: pointer;
-            transition: background-color 0.2s; overflow: hidden;
-            /* FIX ICONOS LADO A LADO: Usar flex para controlar el layout interno */
-            display: flex;
-            align-items: center; /* Centrar verticalmente el contenedor de iconos */
-            justify-content: flex-start; /* Alinear contenedor de iconos a la izquierda */
+            transition: background-color 0.2s, opacity 0.3s ease; overflow: hidden;
+            display: flex; align-items: center; justify-content: flex-start;
         }
-        .modal-day:hover { background-color: #f0f0f0; }
+        /* Estilo para fines de semana (Modal) */
+        .modal-day.weekend-day {
+            background-color: var(--color-weekend-bg-vibrant); /* Amarillo pastel */
+        }
+        .modal-day:hover { background-color: #f0f0f0; } /* Mantener hover */
         .modal-day.empty { background-color: #f9fafb; border-color: #f9fafb; cursor: default; display: block; }
-        /* Número día modal (Esquina superior derecha) */
+        /* Número día modal */
         .modal-day span {
-            position: absolute; top: 4px; right: 5px;
-            font-size: 0.8rem; font-weight: bold; color: #374151;
-            background-color: rgba(255, 255, 255, 0.7); padding: 1px 4px;
-            border-radius: 50%; z-index: 2;
+            position: absolute; top: 4px; right: 5px; font-size: 0.8rem; font-weight: bold; color: #374151;
+            background-color: rgba(255, 255, 255, 0.7); padding: 1px 4px; border-radius: 50%; z-index: 2;
         }
-        /* FIX ICONOS LADO A LADO: Contenedor principal de iconos */
+        /* Contenedor de emojis en modal */
         .modal-day .icons-wrapper {
-            display: flex; /* Poner wrappers de iconos en fila */
-            flex-direction: row; /* Asegurar dirección horizontal */
-            align-items: center; /* Alinear verticalmente */
-            justify-content: flex-start; /* Alinear a la izquierda */
-            gap: 0.6rem; /* Espacio entre los dos iconos */
-            width: auto; /* Ajustar al contenido */
-            padding-left: 5px; /* Pequeño margen izquierdo general */
-            /* Quitar posicionamiento absoluto, ahora es controlado por flex */
-            position: static;
-            transform: none;
-            height: auto;
-            z-index: 1;
+            display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+            gap: 0.6rem; width: auto; padding-left: 5px; position: static; transform: none; height: auto; z-index: 1;
+            font-size: 2.8rem;
+            line-height: normal;
         }
-        /* FIX ICONOS LADO A LADO: Wrapper para cada icono individual */
+        /* Wrapper para cada emoji individual en modal */
         .modal-day .status-icon-wrapper {
-             /* Quitar posicionamiento absoluto */
-             position: static;
-             line-height: 1;
-             display: flex;
-             align-items: center;
-             justify-content: center;
-             width: auto;
-             /* Quitar top/bottom */
+             position: static; display: flex; align-items: center; justify-content: center; width: auto;
+             font-size: inherit;
         }
-        /* Quitar reglas específicas de posicionamiento absoluto */
-        /* .modal-day .status-icon-wrapper-1 { top: 8px; } */
-        /* .modal-day .status-icon-wrapper-2 { bottom: 8px; } */
-
-        .modal-day .status-icon { font-size: 1.6rem; } /* Tamaño iconos */
-        /* Colores originales para iconos en modal */
-        .modal-day .status-icon-wrapper .fa-sun { color: var(--color-td); }
-        .modal-day .status-icon-wrapper .fa-moon { color: var(--color-tn); }
-        .modal-day .status-icon-wrapper .fa-house { color: var(--color-l); }
-        .modal-day .status-icon-wrapper .fa-house.icon2-default { color: var(--color-default-icon2); }
-        .modal-day .status-icon-wrapper .fa-plane { color: var(--color-vac); }
-        .modal-day .status-icon-wrapper .fa-hotel { color: var(--color-hotel); }
-        .modal-day .status-icon-wrapper .flag-sk-svg { width: 1.6em; height: 1.1em; }
-
         .modal-day.current-day { border: 2px solid var(--color-current-day-border); font-weight: bold; }
+
+        /* --- Estilo para Días Pasados (Aplica a Anual y Modal) --- */
+        .day.past-day, .modal-day.past-day {
+             opacity: 0.4;
+             cursor: default;
+        }
+        /* Asegurar que el día actual no se atenúe aunque sea pasado */
+        .day.current-day.past-day, .modal-day.current-day.past-day {
+            opacity: 1;
+        }
 
         /* --- Modal Editor de Día --- */
         #day-editor-modal .modal-content { max-width: 550px; }
         #day-editor-modal .modal-body { display: flex; flex-direction: column; gap: 1.5rem; }
         .editor-section { border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.5rem; }
         .editor-section h3 { font-weight: 600; margin-bottom: 0.8rem; color: #374151; }
-        .status-selection { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
-        .status-option { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0.8rem 0.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; text-align: center; }
-        .status-option:hover { background-color: #f3f4f6; }
-        .status-option.selected { border-color: var(--color-current-day-border); background-color: #e0f2fe; font-weight: 600; }
-        .status-option i, .status-option svg { font-size: 1.8rem; margin-bottom: 0.2rem; width: 1.8rem; height: 1.2rem; }
-        .status-option span { font-size: 0.8rem; color: #374151; }
-        .status-option.clear-option { border-style: dashed; }
-        .status-option.clear-option i { color: #9ca3af; }
-        .status-option .fa-plane { color: var(--color-vac); }
-        .status-option .fa-hotel { color: var(--color-hotel); }
-        .status-option .flag-sk-svg { /* Estilos específicos si son necesarios */ }
-        #day-editor-modal .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 0.5rem; background-color: #f9fafb; }
+        /* Estilos para Select */
+        .editor-section select {
+            width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #d1d5db; border-radius: 0.5rem;
+            background-color: white; font-size: 1rem; cursor: pointer; appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%236b7280%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1.5em 1.5em;
+        }
+        .editor-section select:focus {
+            outline: 2px solid transparent; outline-offset: 2px; border-color: var(--color-current-day-border);
+            box-shadow: 0 0 0 2px var(--color-current-day-border);
+        }
+        #day-editor-modal .modal-footer {
+            padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb; display: flex;
+            justify-content: space-between; gap: 0.5rem; background-color: #f9fafb;
+        }
+
+        /* --- ESTILOS RESPONSIVOS (Para emojis en modal de mes) --- */
+        @media (max-width: 639px) {
+            .modal-day {
+                min-height: 105px;
+                align-items: flex-start;
+                padding-top: 0.8rem;
+            }
+            .modal-day .icons-wrapper {
+                flex-direction: column; align-items: flex-start; gap: 0.3rem;
+                padding-left: 0; margin-top: 1.2rem;
+                font-size: 2.4rem;
+            }
+             .modal-day span {
+                 font-size: 0.7rem; top: 2px; right: 3px;
+             }
+             .day .icon-container .main-icon-wrapper {
+                 font-size: 1rem;
+             }
+        }
+        /* --- FIN ESTILOS RESPONSIVOS --- */
 
     </style>
 </head>
@@ -177,7 +196,7 @@
                  <button id="month-modal-close-btn" class="modal-close-btn" aria-label="Cerrar modal">&times;</button>
             </div>
             <div id="modal-body" class="modal-body">
-                </div>
+                 </div>
         </div>
     </div>
 
@@ -190,24 +209,40 @@
              <div id="day-editor-body" class="modal-body">
                  <div class="editor-section">
                      <h3>Icono 1 (Horario Base / Extra)</h3>
-                     <div id="status-selection-1" class="status-selection">
+                     <div id="status-selection-1">
                          </div>
                  </div>
                   <div class="editor-section">
                      <h3>Icono 2 (Extra)</h3>
-                     <div id="status-selection-2" class="status-selection">
+                     <div id="status-selection-2">
                          </div>
                  </div>
              </div>
               <div class="modal-footer">
-                  <button id="day-editor-cancel" class="button button-secondary">Cancelar</button>
-                  <button id="day-editor-save" class="button button-primary">Guardar</button>
+                 <button id="day-editor-cancel" class="button button-secondary">Cancelar</button>
+                 <button id="day-editor-save" class="button button-primary">Guardar</button>
               </div>
          </div>
     </div>
 
 
     <script>
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyD13sNtjwmBCRNAyXqp1TDqb6BxZE4CSfQ", // ¡Considerar seguridad!
+          authDomain: "calendarionly.firebaseapp.com",
+          databaseURL: "https://calendarionly-default-rtdb.europe-west1.firebasedatabase.app", // Realtime DB URL (no usado aquí, usamos Firestore)
+          projectId: "calendarionly",
+          storageBucket: "calendarionly.firebasestorage.app",
+          messagingSenderId: "906928991840",
+          appId: "1:906928991840:web:bd24a268527685cf42dd05"
+        };
+
+        // --- Initialize Firebase ---
+        // Usamos la versión compat para mantener una sintaxis más similar a v8
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore(); // Obtener instancia de Firestore
+
         // --- Elementos DOM ---
         const calendarAppDiv = document.getElementById('calendar-app');
         const calendarContainer = document.getElementById('calendar-container');
@@ -229,10 +264,11 @@
 
         // --- Estado de la Aplicación ---
         let displayedYear = new Date().getFullYear();
-        let dayData = {}; // { "YYYY-MM-DD": { icon1: 'VAC'/'HOTEL'/'FLAG_SK', icon2: 'VAC'/'HOTEL'/'FLAG_SK' } }
+        let dayData = {}; // Objeto que contiene los datos de los días para el año mostrado
         let selectedDateForEdit = null;
         const today = new Date();
-        today.setHours(0,0,0,0);
+        today.setHours(0,0,0,0); // Normalizar a medianoche para comparaciones precisas
+        let unsubscribeRealtimeListener = null; // Variable para guardar la función de cancelación del listener
 
         // --- Constantes y Configuración ---
         const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -242,51 +278,146 @@
         const sequenceStartDate = new Date(2025, 0, 3);
         const utcStartDate = new Date(Date.UTC(sequenceStartDate.getFullYear(), sequenceStartDate.getMonth(), sequenceStartDate.getDate()));
 
+        // --- Opciones de Estado con Emojis ---
         const BASE_STATUS_OPTIONS = {
-            'TD': { label: 'Día', icon: 'fa-sun' },
-            'TN': { label: 'Noche', icon: 'fa-moon' },
-            'L': { label: 'Libre', icon: 'fa-house' }
+            'TD': { label: 'Día', icon: 'fa-sun', emoji: '☀️' },
+            'TN': { label: 'Noche', icon: 'fa-moon', emoji: '🌙' },
+            'L': { label: 'Libre', icon: 'fa-house', emoji: '🏡' }
         };
         const DEFAULT_ICON2_STATUS = 'HOME_PURPLE';
         const DEFAULT_ICON2_OPTIONS = {
-             [DEFAULT_ICON2_STATUS]: { label: 'Casa', icon: 'fa-house', class: 'icon2-default' }
+             [DEFAULT_ICON2_STATUS]: { label: 'Casa', icon: 'fa-house', class: 'icon2-default', emoji: '🏡' }
         };
         const EXTRA_STATUS_OPTIONS = {
-            'VAC': { label: 'Vacaciones', icon: 'fa-plane' },
-            'HOTEL': { label: 'Hotel', icon: 'fa-hotel' },
-            'FLAG_SK': { label: 'Eslovaquia', icon: 'flag-sk-svg' }
+            'VAC': { label: 'Vacaciones', icon: 'fa-plane', emoji: '✈️' },
+            'HOTEL': { label: 'Hotel', icon: 'fa-hotel', emoji: '🏨' },
+            'FLAG_SK': { label: 'Eslovaquia', icon: 'flag-sk-svg', emoji: '🇸🇰' },
+            'FLAG_ES': { label: 'España', icon: 'flag-es-svg', emoji: '🇪🇸' },
+            'DANCE': { label: 'Bailar', icon: 'fa-person-dancing', emoji: '💃' }
         };
-        const FLAG_SK_SVG = `<svg class="flag-sk-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 6"><path fill="#fff" d="M0 0h9v6H0z"/><path fill="var(--color-flag-sk-blue)" d="M0 2h9v4H0z"/><path fill="var(--color-flag-sk-red)" d="M0 4h9v2H0z"/><g transform="translate(2.75 1.5) scale(.0625)"><path fill="#fff" d="M16 0c-8.837 0-16 7.163-16 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z"/><path fill="var(--color-flag-sk-blue)" d="M16 4.445c-6.375 0-11.555 5.18-11.555 11.555S9.625 27.555 16 27.555 27.555 22.375 27.555 16 22.375 4.445 16 4.445z"/><path fill="#fff" d="M16 10h-4v4h4v4h4v-4h4v-4h-4z"/><path fill="var(--color-flag-sk-red)" d="M16 11h-3v3h3v3h2v-3h3v-3h-3z"/></g></svg>`;
+
+        // --- Funciones de Datos (AHORA CON FIRESTORE) ---
+
+        /**
+         * Obtiene los datos de los días para un año específico desde Firestore.
+         * @param {number} year - El año para el cual obtener los datos.
+         * @returns {Promise<object>} Una promesa que resuelve con el objeto dayData para ese año.
+         */
+        async function fetchDataForYear(year) {
+            console.log(`Fetching data for year ${year} from Firestore...`);
+            const yearDocRef = db.collection('calendars').doc(year.toString());
+            try {
+                const docSnap = await yearDocRef.get();
+                if (docSnap.exists) {
+                    console.log("Document data:", docSnap.data());
+                    // Asegurarse de devolver el mapa 'days' o un objeto vacío si no existe
+                    return docSnap.data().days || {};
+                } else {
+                    // Documento no existe para este año
+                    console.log(`No document found for year ${year} in Firestore.`);
+                    return {};
+                }
+            } catch (error) {
+                console.error(`Error getting document for year ${year}:`, error);
+                // Considerar cómo manejar errores (ej. mostrar mensaje al usuario)
+                return {}; // Devolver objeto vacío en caso de error
+            }
+        }
+
+        /**
+         * Actualiza el estado de un día específico en Firestore.
+         * @param {string} dateString - La fecha en formato 'YYYY-MM-DD'.
+         * @param {string|null} newIcon1 - El nuevo código para el icono 1, o null/"" para limpiar.
+         * @param {string|null} newIcon2 - El nuevo código para el icono 2, o null/"" para limpiar.
+         * @returns {Promise<void>}
+         */
+        async function updateDayStatus(dateString, newIcon1, newIcon2) {
+            console.log(`Updating Firestore for ${dateString}: Icon1=${newIcon1}, Icon2=${newIcon2}`);
+            const yearDocRef = db.collection('calendars').doc(displayedYear.toString());
+
+            // Crear el objeto de actualización para Firestore
+            // Usamos notación de punto para actualizar campos anidados en el mapa 'days'
+            const updateData = {};
+            const fieldPathIcon1 = `days.${dateString}.icon1`;
+            const fieldPathIcon2 = `days.${dateString}.icon2`;
+
+            if (newIcon1 === "" || newIcon1 === null) {
+                // Para borrar un campo, usamos firebase.firestore.FieldValue.delete()
+                // Si todo el objeto del día queda vacío, podríamos querer borrarlo,
+                // pero setDoc con merge maneja bien la creación/actualización.
+                // Por simplicidad, podemos asignar null o un valor especial si delete() da problemas.
+                // O podríamos leer el doc, modificar el objeto local y hacer set completo.
+                // La forma más robusta es usar FieldValue.delete() si está disponible en compat,
+                // o asignar null si es necesario.
+                // Alternativa simple: asignar null o borrar localmente y luego set con merge.
+                 updateData[fieldPathIcon1] = firebase.firestore.FieldValue.delete();
+            } else {
+                updateData[fieldPathIcon1] = newIcon1;
+            }
+
+            if (newIcon2 === "" || newIcon2 === null) {
+                 updateData[fieldPathIcon2] = firebase.firestore.FieldValue.delete();
+            } else {
+                updateData[fieldPathIcon2] = newIcon2;
+            }
+
+             // Si ambos se borran, necesitamos asegurarnos de que el objeto del día se elimine
+             // Firestore no elimina automáticamente objetos vacíos con FieldValue.delete en subcampos.
+             // Una estrategia es, si ambos son null/vacío, borrar la clave completa del día.
+             if ((newIcon1 === "" || newIcon1 === null) && (newIcon2 === "" || newIcon2 === null)) {
+                 updateData[`days.${dateString}`] = firebase.firestore.FieldValue.delete();
+                 // Limpiar las actualizaciones individuales si vamos a borrar todo el día
+                 delete updateData[fieldPathIcon1];
+                 delete updateData[fieldPathIcon2];
+             }
 
 
-        // --- Funciones LocalStorage ---
-        function saveData() { try { localStorage.setItem(`calendarData_${displayedYear}`, JSON.stringify(dayData)); console.log("Datos guardados para", displayedYear); } catch (e) { console.error("Error guardando:", e); } }
-        function loadData() { try { const data = localStorage.getItem(`calendarData_${displayedYear}`); dayData = data ? JSON.parse(data) : {}; console.log("Datos cargados para", displayedYear); } catch (e) { console.error("Error cargando:", e); dayData = {}; } }
+            try {
+                // Usar set con merge:true crea el documento si no existe
+                // y actualiza/añade los campos especificados sin tocar los demás días.
+                await yearDocRef.set(updateData, { merge: true });
+                console.log(`Firestore updated successfully for ${dateString}`);
+
+                // ACTUALIZACIÓN LOCAL (Opcional si confías en onSnapshot, pero bueno para UI inmediata)
+                // Actualizar el objeto local dayData inmediatamente para reflejar el cambio
+                // (Esta parte es similar a la versión anterior, pero ahora ocurre *después* del intento de guardado)
+                let localDayInfo = dayData[dateString] || {};
+                if (newIcon1 === "" || newIcon1 === null) delete localDayInfo.icon1; else localDayInfo.icon1 = newIcon1;
+                if (newIcon2 === "" || newIcon2 === null) delete localDayInfo.icon2; else localDayInfo.icon2 = newIcon2;
+                if (Object.keys(localDayInfo).length === 0) delete dayData[dateString]; else dayData[dateString] = localDayInfo;
+
+                // Refrescar UI (si onSnapshot no es suficiente o para respuesta inmediata)
+                // refreshUI(); // onSnapshot debería encargarse, pero podemos forzarlo aquí
+
+            } catch (error) {
+                console.error(`Error updating Firestore for ${dateString}:`, error);
+                // Considerar revertir el cambio local o notificar al usuario
+            }
+        }
 
         // --- Lógica Horario Base ---
         function getDefaultStatusForDay(dateString) {
             const [year, month, day] = dateString.split('-').map(Number);
             const currentDate = new Date(Date.UTC(year, month - 1, day));
-            if (currentDate >= utcStartDate) {
-                const timeDiff = currentDate.getTime() - utcStartDate.getTime();
-                const dayDifference = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-                const patternIndex = dayDifference % patternLength;
-                return baseWorkPattern[patternIndex];
-            } else { return 'L'; }
+            if (currentDate < utcStartDate) { return 'L'; }
+            const timeDiff = currentDate.getTime() - utcStartDate.getTime();
+            const dayDifference = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const patternIndex = dayDifference % patternLength;
+            return baseWorkPattern[patternIndex];
         }
 
         // --- Funciones de Renderizado ---
-        function createDayCellHTML(day, monthIndex, year, isModal = false) {
+        function createDayCellHTML(day, monthIndex, year, isModal = false, isWeekend = false) {
              const date = new Date(year, monthIndex, day); date.setHours(0,0,0,0);
              const dateString = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
              const isCurrentDay = date.getTime() === today.getTime();
-             const cellClass = isModal ? 'modal-day' : 'day';
-             let cellHTML = `<div class="${cellClass}${isCurrentDay ? ' current-day' : ''}" data-date="${dateString}">`;
+             let cellClass = isModal ? 'modal-day' : 'day';
+             if (isCurrentDay) cellClass += ' current-day';
+             if (isWeekend) cellClass += ' weekend-day';
+
+             let cellHTML = `<div class="${cellClass}" data-date="${dateString}">`;
              if (isModal) {
-                 cellHTML += `<span>${day}</span><div class="icons-wrapper">`;
-                 cellHTML += `<span class="status-icon-wrapper status-icon-wrapper-1"></span>`;
-                 cellHTML += `<span class="status-icon-wrapper status-icon-wrapper-2"></span>`;
-                 cellHTML += `</div>`;
+                 cellHTML += `<span>${day}</span><div class="icons-wrapper"><span class="status-icon-wrapper status-icon-wrapper-1"></span><span class="status-icon-wrapper status-icon-wrapper-2"></span></div>`;
              } else {
                  cellHTML += `<span>${day}</span><div class="icon-container"><span class="main-icon-wrapper"></span><span class="secondary-indicator-wrapper"></span></div>`;
              }
@@ -297,8 +428,12 @@
             try {
                 const dateString = dayCell.dataset.date;
                 if (!dateString) return;
-                const dayInfo = dayData[dateString] || {};
+                const dayInfo = dayData[dateString] || {}; // Usa el dayData global
                 const isModal = dayCell.classList.contains('modal-day');
+
+                const date = new Date(dateString + "T00:00:00");
+                if (date < today) { dayCell.classList.add('past-day'); }
+                else { dayCell.classList.remove('past-day'); }
 
                 const defaultStatusIcon1 = getDefaultStatusForDay(dateString);
                 const defaultStatusIcon2 = DEFAULT_ICON2_STATUS;
@@ -311,59 +446,22 @@
                 if (isModal) {
                     const iconWrapper1 = dayCell.querySelector('.status-icon-wrapper-1');
                     const iconWrapper2 = dayCell.querySelector('.status-icon-wrapper-2');
-
-                    if (iconWrapper1) {
-                        iconWrapper1.innerHTML = '';
-                        if (icon1Info) {
-                            const titleText = icon1Info.label || 'Icono 1';
-                            if (finalStatusIcon1 === 'FLAG_SK') {
-                                iconWrapper1.innerHTML = FLAG_SK_SVG;
-                            } else {
-                                iconWrapper1.innerHTML = `<i class="fas ${icon1Info.icon} status-icon ${icon1Info.class || ''}" title="${titleText}"></i>`;
-                            }
-                        }
-                    } else { console.warn("Icon wrapper 1 no encontrado", dayCell); }
-
-                    if (iconWrapper2) {
-                        iconWrapper2.innerHTML = '';
-                        if (icon2Info) {
-                             const titleText = icon2Info.label || 'Icono 2';
-                             if (finalStatusIcon2 === 'FLAG_SK') {
-                                 iconWrapper2.innerHTML = FLAG_SK_SVG;
-                             } else {
-                                 iconWrapper2.innerHTML = `<i class="fas ${icon2Info.icon} status-icon ${icon2Info.class || ''}" title="${titleText}"></i>`;
-                             }
-                        }
-                    } else { console.warn("Icon wrapper 2 no encontrado", dayCell); }
-
+                    if (iconWrapper1) { iconWrapper1.textContent = icon1Info?.emoji || ''; iconWrapper1.title = icon1Info?.label || ''; }
+                    else { console.warn("Wrapper 1 no encontrado", dayCell); }
+                    if (iconWrapper2) { iconWrapper2.textContent = icon2Info?.emoji || ''; iconWrapper2.title = icon2Info?.label || ''; }
+                    else { console.warn("Wrapper 2 no encontrado", dayCell); }
                 } else {
                     const mainIconWrapper = dayCell.querySelector('.main-icon-wrapper');
                     const secondaryIndicatorWrapper = dayCell.querySelector('.secondary-indicator-wrapper');
-
-                    if (mainIconWrapper) {
-                        mainIconWrapper.innerHTML = '';
-                        if (icon1Info) {
-                            const titleText = icon1Info.label || 'Icono 1';
-                             if (finalStatusIcon1 === 'FLAG_SK') {
-                                 mainIconWrapper.innerHTML = `<i class="fas fa-flag main-icon" title="${titleText}"></i>`;
-                             } else {
-                                 mainIconWrapper.innerHTML = `<i class="fas ${icon1Info.icon} main-icon" title="${titleText}"></i>`;
-                             }
-                        }
-                    } else { console.warn("Main icon wrapper no encontrado", dayCell); }
-
+                    if (mainIconWrapper) { mainIconWrapper.textContent = icon1Info?.emoji || ''; mainIconWrapper.title = icon1Info?.label || ''; }
+                    else { console.warn("Main wrapper no encontrado", dayCell); }
                     if (secondaryIndicatorWrapper) {
                         secondaryIndicatorWrapper.innerHTML = '';
-                        if (dayInfo.icon2) {
-                            secondaryIndicatorWrapper.innerHTML = `<span class="secondary-indicator" title="Estado extra añadido"></span>`;
-                        }
-                    } else { console.warn("Secondary indicator wrapper no encontrado", dayCell); }
+                        if (dayInfo.icon2) { secondaryIndicatorWrapper.innerHTML = `<span class="secondary-indicator" title="Estado extra añadido"></span>`; }
+                    } else { console.warn("Secondary wrapper no encontrado", dayCell); }
                 }
-            } catch (error) {
-                 console.error(`Error general en applyDayMarkings para celda ${dayCell?.dataset?.date}:`, error, error.stack, dayCell);
-            }
+            } catch (error) { console.error(`Error aplicando marcas al día ${dayCell?.dataset?.date}:`, error, error.stack, dayCell); }
         }
-
 
         function generateSingleMonthGrid(year, monthIndex) {
              let gridHTML = `<div class="modal-days-grid">`;
@@ -373,16 +471,23 @@
              const offset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
              for (let i = 0; i < offset; i++) { gridHTML += `<div class="modal-day empty"></div>`; }
              for (let day = 1; day <= daysInMonth; day++) {
-                 gridHTML += createDayCellHTML(day, monthIndex, year, true);
+                 const currentDate = new Date(year, monthIndex, day);
+                 const dayOfWeek = currentDate.getDay();
+                 const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                 gridHTML += createDayCellHTML(day, monthIndex, year, true, isWeekend);
              }
              gridHTML += `</div>`;
              const tempDiv = document.createElement('div');
              tempDiv.innerHTML = gridHTML;
+             tempDiv.querySelectorAll('.modal-day[data-date]').forEach(applyDayMarkings);
              return tempDiv.firstElementChild;
         }
 
-        function generateAnnualCalendar(year) {
-            calendarContainer.innerHTML = ''; currentYearSpan.textContent = year; loadData();
+        function renderAnnualCalendar(year) {
+            console.log(`Rendering annual calendar for ${year}`);
+            calendarContainer.innerHTML = '';
+            currentYearSpan.textContent = year;
+
             let calendarHTML = '';
             for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
                 calendarHTML += `<div class="month" data-month="${monthIndex}" data-year="${year}"><div class="month-header">${monthNames[monthIndex]}</div><div class="days-grid">`;
@@ -392,14 +497,18 @@
                 const offset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
                 for (let i = 0; i < offset; i++) { calendarHTML += `<div class="day empty"></div>`; }
                 for (let day = 1; day <= daysInMonth; day++) {
-                    calendarHTML += createDayCellHTML(day, monthIndex, year, false);
-                 }
+                    const currentDate = new Date(year, monthIndex, day);
+                    const dayOfWeek = currentDate.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    calendarHTML += createDayCellHTML(day, monthIndex, year, false, isWeekend);
+                }
                 calendarHTML += `</div></div>`;
             }
             calendarContainer.innerHTML = calendarHTML;
+
             if (calendarContainer.childElementCount > 0) {
                  calendarContainer.querySelectorAll('.day[data-date]').forEach(applyDayMarkings);
-            }
+            } else { console.warn("Calendario anual vacío post-generación."); }
         }
 
         function populateDayEditor(dateString) {
@@ -407,180 +516,231 @@
             const dayInfo = dayData[dateString] || {};
             const currentStatusIcon1 = dayInfo.icon1;
             const currentStatusIcon2 = dayInfo.icon2;
-            const dateObj = new Date(dateString + 'T00:00:00');
-            dayEditorTitle.textContent = `Editar ${dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
 
-            // --- Rellenar sección Icono 1 ---
+            try {
+                const dateObj = new Date(dateString + 'T00:00:00');
+                dayEditorTitle.textContent = `Editar ${dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+            } catch(e) { dayEditorTitle.textContent = `Editar ${dateString}`; console.error("Error formateando fecha:", e); }
+
             statusSelectionDiv1.innerHTML = '';
-            Object.entries(EXTRA_STATUS_OPTIONS).forEach(([code, { label, icon }]) => {
-                const isSelected = currentStatusIcon1 === code;
-                let iconHTML = icon === 'flag-sk-svg' ? FLAG_SK_SVG : `<i class="fas ${icon}"></i>`;
-                statusSelectionDiv1.innerHTML += `<div class="status-option ${isSelected ? 'selected' : ''}" data-status="${code}">${iconHTML}<span>${label}</span></div>`;
-            });
-            const clearSelected1 = !currentStatusIcon1;
-            statusSelectionDiv1.innerHTML += `<div class="status-option clear-option ${clearSelected1 ? 'selected' : ''}" data-status=""><i class="fas fa-eraser"></i><span>Limpiar (Base)</span></div>`;
-
-            // --- Rellenar sección Icono 2 ---
             statusSelectionDiv2.innerHTML = '';
-            Object.entries(EXTRA_STATUS_OPTIONS).forEach(([code, { label, icon }]) => {
-                const isSelected = currentStatusIcon2 === code;
-                 let iconHTML = icon === 'flag-sk-svg' ? FLAG_SK_SVG : `<i class="fas ${icon}"></i>`;
-                statusSelectionDiv2.innerHTML += `<div class="status-option ${isSelected ? 'selected' : ''}" data-status="${code}">${iconHTML}<span>${label}</span></div>`;
+
+            const select1 = document.createElement('select');
+            select1.id = 'icon1-select';
+            select1.className = 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50';
+            const clearOption1 = document.createElement('option');
+            clearOption1.value = ""; clearOption1.textContent = "--- Limpiar (Horario Base) ---";
+            select1.appendChild(clearOption1);
+            Object.entries(EXTRA_STATUS_OPTIONS).forEach(([code, { label, emoji }]) => {
+                const option = document.createElement('option'); option.value = code; option.textContent = `${emoji} ${label}`;
+                if (currentStatusIcon1 === code) option.selected = true; select1.appendChild(option);
             });
-            const clearSelected2 = !currentStatusIcon2;
-            statusSelectionDiv2.innerHTML += `<div class="status-option clear-option ${clearSelected2 ? 'selected' : ''}" data-status=""><i class="fas fa-eraser"></i><span>Limpiar (Casa)</span></div>`;
+            if (currentStatusIcon1 === undefined) clearOption1.selected = true;
+            statusSelectionDiv1.appendChild(select1);
 
-
-            // --- Añadir listeners a AMBAS secciones ---
-             document.querySelectorAll('.status-option').forEach(option => {
-                 option.addEventListener('click', (e) => {
-                     const section = e.currentTarget.closest('.status-selection');
-                     section.querySelector('.selected')?.classList.remove('selected');
-                     e.currentTarget.classList.add('selected');
-                 });
-             });
+            const select2 = document.createElement('select');
+            select2.id = 'icon2-select';
+            select2.className = 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50';
+            const clearOption2 = document.createElement('option');
+            clearOption2.value = ""; clearOption2.textContent = "--- Limpiar (Casa por defecto) ---";
+            select2.appendChild(clearOption2);
+            Object.entries(EXTRA_STATUS_OPTIONS).forEach(([code, { label, emoji }]) => {
+                const option = document.createElement('option'); option.value = code; option.textContent = `${emoji} ${label}`;
+                if (currentStatusIcon2 === code) option.selected = true; select2.appendChild(option);
+            });
+            if (currentStatusIcon2 === undefined) clearOption2.selected = true;
+            statusSelectionDiv2.appendChild(select2);
         }
 
+        function openMonthModal(year, monthIndex) {
+            if (!monthModal || !monthModalTitle || !monthModalBody) { console.error("CRITICAL: Elementos modal mes no encontrados."); return; }
+            try {
+                if (isNaN(monthIndex) || isNaN(year) || monthIndex < 0 || monthIndex > 11) { console.error("Error: Año/mes inválido", year, monthIndex); return; }
+                monthModalTitle.textContent = `${monthNames[monthIndex]} ${year}`;
+                monthModalBody.innerHTML = '';
+                const monthGridElement = generateSingleMonthGrid(year, monthIndex); // Ya aplica marcas
+                if (monthGridElement instanceof Node) {
+                    monthModalBody.appendChild(monthGridElement);
+                    monthModal.classList.add('visible');
+                } else { console.error("Error: generateSingleMonthGrid no devolvió nodo."); }
+            } catch (error) { console.error(`Error abriendo modal mes ${monthIndex + 1}/${year}:`, error, error.stack); }
+        }
+
+        /**
+         * Refresca la interfaz de usuario (vista anual y modal si está abierto).
+         * Se llama después de cambios en los datos (locales o de Firebase).
+         */
+        function refreshUI() {
+             console.log("Refreshing UI...");
+             // 1. Redibujar siempre la vista anual completa
+             renderAnnualCalendar(displayedYear); // Usa renderAnnualCalendar que aplica marcas
+
+             // 2. Si el modal del mes está visible, redibujar su contenido
+             if (monthModal && monthModal.classList.contains('visible')) {
+                 console.log("Month modal is visible, refreshing its content.");
+                 const titleParts = monthModalTitle.textContent.split(' ');
+                 const monthName = titleParts[0];
+                 const year = parseInt(titleParts[1]);
+                 const monthIndex = monthNames.indexOf(monthName);
+
+                 if (monthIndex !== -1 && !isNaN(year)) {
+                     // Solo regenerar si el año/mes del modal coincide con el actual
+                     // (Evita redibujar si el cambio vino de otro año)
+                     if (year === displayedYear) {
+                         const newMonthGrid = generateSingleMonthGrid(year, monthIndex); // Ya aplica marcas
+                         monthModalBody.innerHTML = '';
+                         monthModalBody.appendChild(newMonthGrid);
+                     } else {
+                         console.log("Modal open for different year/month than data change, not refreshing modal content.");
+                     }
+                 } else {
+                     console.warn("Could not determine year/month from modal title to refresh.");
+                 }
+             }
+        }
+
+        /**
+         * Configura el listener de Firebase para el año especificado.
+         * @param {number} year El año a escuchar.
+         */
+        function setupRealtimeListener(year) {
+            // Cancelar listener anterior si existe
+            if (unsubscribeRealtimeListener) {
+                console.log("Detaching previous listener...");
+                unsubscribeRealtimeListener();
+                unsubscribeRealtimeListener = null;
+            }
+
+            console.log(`Setting up Firestore listener for year ${year}...`);
+            const yearDocRef = db.collection('calendars').doc(year.toString());
+
+            unsubscribeRealtimeListener = yearDocRef.onSnapshot(doc => {
+                console.log("Realtime update received from Firestore for year", year);
+                if (doc.exists) {
+                    dayData = doc.data().days || {};
+                } else {
+                    console.log(`Document for year ${year} does not exist in Firestore.`);
+                    dayData = {}; // Reset local data if doc deleted
+                }
+                // Solo refrescar si el año del listener coincide con el año mostrado
+                if (year === displayedYear) {
+                    refreshUI();
+                } else {
+                     console.log(`Listener update for year ${year}, but currently displaying ${displayedYear}. UI not refreshed.`);
+                }
+            }, error => {
+                console.error(`Error in Firestore listener for year ${year}: `, error);
+                // Aquí podrías intentar reconectar o notificar al usuario
+            });
+        }
+
+
         // --- Handlers de Eventos ---
-        prevYearBtn.addEventListener('click', () => { displayedYear--; generateAnnualCalendar(displayedYear); });
-        nextYearBtn.addEventListener('click', () => { displayedYear++; generateAnnualCalendar(displayedYear); });
+        prevYearBtn.addEventListener('click', async () => { // Hacer async
+            displayedYear--;
+            dayData = await fetchDataForYear(displayedYear); // Esperar datos
+            setupRealtimeListener(displayedYear); // Configurar listener para el nuevo año
+            refreshUI(); // Redibujar todo
+        });
+        nextYearBtn.addEventListener('click', async () => { // Hacer async
+            displayedYear++;
+            dayData = await fetchDataForYear(displayedYear); // Esperar datos
+            setupRealtimeListener(displayedYear); // Configurar listener para el nuevo año
+            refreshUI(); // Redibujar todo
+        });
 
-        // Abrir Modal Mes
         calendarContainer.addEventListener('click', (event) => {
-            const monthDiv = event.target.closest('.month');
-            if (!monthDiv) return;
-
-            const currentMonthModal = document.getElementById('month-modal');
-            const currentMonthModalTitle = document.getElementById('modal-title');
-            const currentModalBody = document.getElementById('modal-body');
-            if (!currentMonthModal || !currentMonthModalTitle || !currentModalBody) { console.error("CRITICAL: Modal elements not found!"); return; }
-
+            const monthDiv = event.target.closest('.month'); if (!monthDiv) return;
             try {
                 const monthIndex = parseInt(monthDiv.dataset.month);
                 const year = parseInt(monthDiv.dataset.year);
-                if (isNaN(monthIndex) || isNaN(year)) { console.error("Invalid month/year"); return; }
-
-                currentMonthModalTitle.textContent = `${monthNames[monthIndex]} ${year}`;
-                currentModalBody.innerHTML = '';
-                const monthGridElement = generateSingleMonthGrid(year, monthIndex);
-
-                if (monthGridElement instanceof Node) {
-                    currentModalBody.appendChild(monthGridElement);
-                    const modalDays = currentModalBody.querySelectorAll('.modal-day[data-date]');
-                    if (modalDays) {
-                         modalDays.forEach(applyDayMarkings);
-                    }
-                    currentMonthModal.classList.add('visible');
-                } else { console.error("generateSingleMonthGrid failed"); }
-            } catch (error) { console.error("Error opening month modal:", error, error.stack); }
+                // No necesitamos cargar datos aquí, openMonthModal usa los datos globales
+                openMonthModal(year, monthIndex);
+            }
+            catch(error) { console.error("Error obteniendo datos mes:", error); }
         });
 
+        monthModalCloseBtn.addEventListener('click', () => { if (monthModal) monthModal.classList.remove('visible'); });
+        monthModal.addEventListener('click', (event) => { if (event.target === monthModal) monthModal.classList.remove('visible'); });
 
-        // Cerrar Modal Mes
-        monthModalCloseBtn.addEventListener('click', () => {
-             const currentMonthModal = document.getElementById('month-modal');
-             if (currentMonthModal) currentMonthModal.classList.remove('visible');
-        });
-        monthModal.addEventListener('click', (event) => {
-             if (event.target === document.getElementById('month-modal')) {
-                 document.getElementById('month-modal').classList.remove('visible');
-             }
-        });
-
-
-        // Abrir Modal Editor Día
         monthModalBody.addEventListener('click', (event) => {
-             const currentDayEditorModal = document.getElementById('day-editor-modal');
-             if (!currentDayEditorModal) { console.error("Error: Editor modal element not found."); return; }
              const dayDiv = event.target.closest('.modal-day:not(.empty)');
              if (dayDiv) {
+                 if (dayDiv.classList.contains('past-day')) return;
                  const dateString = dayDiv.dataset.date;
-                 populateDayEditor(dateString);
-                 currentDayEditorModal.classList.add('visible');
+                 if (dateString) {
+                     populateDayEditor(dateString);
+                     if (dayEditorModal) dayEditorModal.classList.add('visible');
+                     else console.error("Error: Modal editor no encontrado.");
+                 } else { console.warn("Día clickeado sin data-date.", dayDiv); }
              }
         });
 
+        // Usar async para poder usar await dentro si fuera necesario (aunque updateDayStatus ya lo es)
+        dayEditorSaveBtn.addEventListener('click', async () => {
+            if (!selectedDateForEdit) { console.error("Error: No hay fecha seleccionada."); return; }
+            const selectElement1 = statusSelectionDiv1.querySelector('select');
+            const selectElement2 = statusSelectionDiv2.querySelector('select');
+            if (!selectElement1 || !selectElement2) { console.error("Error: Selectores no encontrados."); return; }
 
-        // Guardar Cambios Editor Día
-        dayEditorSaveBtn.addEventListener('click', () => {
-            const currentModalBody = document.getElementById('modal-body');
-            const currentDayEditorModal = document.getElementById('day-editor-modal');
-            if (!currentModalBody || !currentDayEditorModal) { console.error("Error: modalBody or dayEditorModal not available on save."); return; }
-            if (!selectedDateForEdit) { console.error("Error: No date selected for saving."); return; }
+            const newStatus1 = selectElement1.value;
+            const newStatus2 = selectElement2.value;
 
-            const selectedStatusOption1 = statusSelectionDiv1.querySelector('.status-option.selected');
-            const selectedStatusOption2 = statusSelectionDiv2.querySelector('.status-option.selected');
+            // Llamar a la función centralizada (que ahora es async)
+            await updateDayStatus(selectedDateForEdit, newStatus1, newStatus2);
 
-            const newStatus1 = selectedStatusOption1 ? selectedStatusOption1.dataset.status : null;
-            const newStatus2 = selectedStatusOption2 ? selectedStatusOption2.dataset.status : null;
+            // La UI se refresca desde onSnapshot o desde updateDayStatus (si se descomenta refreshUI allí)
 
-            let dayInfo = dayData[selectedDateForEdit] || {};
-
-            if (newStatus1 === "") { delete dayInfo.icon1; }
-            else if (newStatus1 !== null) { dayInfo.icon1 = newStatus1; }
-
-             if (newStatus2 === "") { delete dayInfo.icon2; }
-             else if (newStatus2 !== null) { dayInfo.icon2 = newStatus2; }
-
-            if (Object.keys(dayInfo).length === 0) {
-                 delete dayData[selectedDateForEdit];
-            } else {
-                 dayData[selectedDateForEdit] = dayInfo;
-            }
-
-            saveData();
-            const dayCellInModal = currentModalBody.querySelector(`.modal-day[data-date="${selectedDateForEdit}"]`); if (dayCellInModal) applyDayMarkings(dayCellInModal);
-            const dayCellInAnnual = calendarContainer.querySelector(`.day[data-date="${selectedDateForEdit}"]`); if (dayCellInAnnual) applyDayMarkings(dayCellInAnnual);
-            currentDayEditorModal.classList.remove('visible');
+            // Cerrar editor
+            if (dayEditorModal) dayEditorModal.classList.remove('visible');
             selectedDateForEdit = null;
         });
 
-        // Cancelar / Cerrar Editor Día
-        dayEditorCancelBtn.addEventListener('click', () => {
-             const currentDayEditorModal = document.getElementById('day-editor-modal');
-             if (currentDayEditorModal) currentDayEditorModal.classList.remove('visible');
-        });
-        dayEditorCloseBtn.addEventListener('click', () => {
-             const currentDayEditorModal = document.getElementById('day-editor-modal');
-             if (currentDayEditorModal) currentDayEditorModal.classList.remove('visible');
-        });
-        dayEditorModal.addEventListener('click', (event) => {
-             const currentDayEditorModal = document.getElementById('day-editor-modal');
-             if (event.target === currentDayEditorModal) {
-                  currentDayEditorModal.classList.remove('visible');
-             }
-        });
-
+        dayEditorCancelBtn.addEventListener('click', () => { if (dayEditorModal) dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; });
+        dayEditorCloseBtn.addEventListener('click', () => { if (dayEditorModal) dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; });
+        dayEditorModal.addEventListener('click', (event) => { if (event.target === dayEditorModal) { dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; } });
 
          document.addEventListener('keydown', (event) => {
-             const currentDayEditorModal = document.getElementById('day-editor-modal');
-             const currentMonthModal = document.getElementById('month-modal');
-             if (event.key === 'Escape') {
-                 if (currentDayEditorModal && currentDayEditorModal.classList.contains('visible')) {
-                      currentDayEditorModal.classList.remove('visible');
-                 } else if (currentMonthModal && currentMonthModal.classList.contains('visible')) {
-                      currentMonthModal.classList.remove('visible');
-                 }
-             }
+              if (event.key === 'Escape') {
+                  if (dayEditorModal && dayEditorModal.classList.contains('visible')) { dayEditorModal.classList.remove('visible'); selectedDateForEdit = null; }
+                  else if (monthModal && monthModal.classList.contains('visible')) { monthModal.classList.remove('visible'); }
+              }
          });
 
         // --- Inicialización App ---
-        function initApp() {
-            console.log(`Iniciando calendario simplificado`);
+        // Hacer initApp async para poder usar await al cargar datos iniciales
+        async function initApp() {
+            console.log(`Iniciando calendario con Firebase`);
             const essentialElementsExist = calendarAppDiv && calendarContainer && monthModal && dayEditorModal && monthModalBody && statusSelectionDiv1 && statusSelectionDiv2;
             if (!essentialElementsExist) {
-                 console.error("Error crítico: Faltan elementos esenciales del DOM al iniciar.");
-                 alert("Error: No se pudo iniciar el calendario correctamente.");
-                 return;
+                console.error("Error crítico: Faltan elementos DOM esenciales.");
+                calendarAppDiv.innerHTML = '<p class="text-red-600 font-bold text-center p-4">Error: No se pudo iniciar el calendario.</p>';
+                return;
             }
-             console.log("Elemento modalBody encontrado en initApp:", document.getElementById('modal-body'));
+
+            // 1. Cargar datos iniciales para el año actual
+            dayData = await fetchDataForYear(displayedYear); // Esperar a que los datos carguen
+
+            // 2. Configurar el listener de tiempo real para el año inicial
+            setupRealtimeListener(displayedYear);
+
+            // 3. Mostrar la app y renderizar la UI inicial (ya con los datos cargados)
             calendarAppDiv.style.display = 'block';
-            generateAnnualCalendar(displayedYear);
+            renderAnnualCalendar(displayedYear);
+
+            // 4. Abrir modal del mes actual si corresponde
+            const currentActualMonth = today.getMonth();
+            const currentActualYear = today.getFullYear();
+            if (displayedYear === currentActualYear) {
+               console.log(`Abriendo modal mes actual: ${monthNames[currentActualMonth]} ${currentActualYear}`);
+               openMonthModal(currentActualYear, currentActualMonth);
+            } else {
+                console.log(`Año mostrado (${displayedYear}) != año actual (${currentActualYear}). No se abre modal mes actual.`);
+            }
         }
 
         // --- Ejecución Inicial ---
         document.addEventListener('DOMContentLoaded', initApp);
-
 
     </script>
 
